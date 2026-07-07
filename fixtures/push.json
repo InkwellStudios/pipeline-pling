@@ -1,0 +1,67 @@
+{
+  "ref": "refs/heads/main",
+  "before": "1111111111111111111111111111111111111111",
+  "after": "2222222222222222222222222222222222222222",
+  "compare": "https://github.com/qbox-project/pipeline-pling/compare/1111111...2222222",
+  "commits": [
+    {
+      "id": "abc1234567890abcdef1234567890abcdef1234",
+      "message": "feat: add local act test payload\n\nCo-authored-by: Jane Doe <123456+janedoe@users.noreply.github.com>",
+      "timestamp": "2026-07-07T12:00:00Z",
+      "url": "https://github.com/qbox-project/pipeline-pling/commit/abc1234567890abcdef1234567890abcdef1234",
+      "author": {
+        "name": "Trevor",
+        "email": "trevor@example.com",
+        "username": "TrevorBarnes"
+      },
+      "committer": {
+        "name": "GitHub",
+        "email": "noreply@github.com",
+        "username": "web-flow"
+      },
+      "added": ["fixtures/push.json"],
+      "removed": [],
+      "modified": []
+    },
+    {
+      "id": "def4567890abcdef1234567890abcdef1234567",
+      "message": "fix: improve Discord notification rendering",
+      "timestamp": "2026-07-07T12:05:00Z",
+      "url": "https://github.com/qbox-project/pipeline-pling/commit/def4567890abcdef1234567890abcdef1234567",
+      "author": {
+        "name": "Alex Example",
+        "email": "987654+alex-example@users.noreply.github.com"
+      },
+      "committer": {
+        "name": "Alex Example",
+        "email": "987654+alex-example@users.noreply.github.com"
+      },
+      "added": [],
+      "removed": [],
+      "modified": ["src/message.ts"]
+    }
+  ],
+  "repository": {
+    "id": 1,
+    "name": "pipeline-pling",
+    "full_name": "qbox-project/pipeline-pling",
+    "html_url": "https://github.com/qbox-project/pipeline-pling",
+    "private": false,
+    "owner": {
+      "name": "qbox-project",
+      "email": "noreply@github.com",
+      "login": "qbox-project"
+    }
+  },
+  "pusher": {
+    "name": "TrevorBarnes",
+    "email": "trevor@example.com"
+  },
+  "sender": {
+    "login": "TrevorBarnes",
+    "id": 1,
+    "type": "User",
+    "avatar_url": "https://avatars.githubusercontent.com/u/1?v=4",
+    "html_url": "https://github.com/TrevorBarnes"
+  }
+}

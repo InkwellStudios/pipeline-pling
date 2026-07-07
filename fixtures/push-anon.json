@@ -1,0 +1,69 @@
+{
+  "ref": "refs/heads/main",
+  "before": "3333333333333333333333333333333333333333",
+  "after": "4444444444444444444444444444444444444444",
+  "compare": "https://github.com/qbox-project/pipeline-pling/compare/3333333...4444444",
+  "commits": [
+    {
+      "id": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+      "message": "feat: secret internal change !anon\n\nThis body must not appear in Discord.\n\nCo-authored-by: Hidden Person <123456+hidden-person@users.noreply.github.com>",
+      "timestamp": "2026-07-07T13:00:00Z",
+      "url": "https://github.com/qbox-project/pipeline-pling/commit/deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+      "author": {
+        "name": "Secret Author",
+        "email": "secret@example.com",
+        "username": "secret-author"
+      },
+      "committer": {
+        "name": "Secret Committer",
+        "email": "committer@example.com",
+        "username": "secret-committer"
+      },
+      "added": [],
+      "removed": [],
+      "modified": ["src/private.ts"]
+    },
+    {
+      "id": "abc1234567890abcdef1234567890abcdef1234",
+      "message": "fix: visible follow-up change",
+      "timestamp": "2026-07-07T13:05:00Z",
+      "url": "https://github.com/qbox-project/pipeline-pling/commit/abc1234567890abcdef1234567890abcdef1234",
+      "author": {
+        "name": "Trevor",
+        "email": "trevor@example.com",
+        "username": "TrevorBarnes"
+      },
+      "committer": {
+        "name": "Trevor",
+        "email": "trevor@example.com",
+        "username": "TrevorBarnes"
+      },
+      "added": [],
+      "removed": [],
+      "modified": ["src/message.ts"]
+    }
+  ],
+  "repository": {
+    "id": 1,
+    "name": "pipeline-pling",
+    "full_name": "qbox-project/pipeline-pling",
+    "html_url": "https://github.com/qbox-project/pipeline-pling",
+    "private": false,
+    "owner": {
+      "name": "qbox-project",
+      "email": "noreply@github.com",
+      "login": "qbox-project"
+    }
+  },
+  "pusher": {
+    "name": "TrevorBarnes",
+    "email": "trevor@example.com"
+  },
+  "sender": {
+    "login": "TrevorBarnes",
+    "id": 1,
+    "type": "User",
+    "avatar_url": "https://avatars.githubusercontent.com/u/1?v=4",
+    "html_url": "https://github.com/TrevorBarnes"
+  }
+}

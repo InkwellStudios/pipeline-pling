@@ -55,6 +55,44 @@ npm run check
 
 `npm run check` runs typecheck, Vitest, and esbuild. Commit the generated `dist/index.js` so the action runs without a checkout-time build step.
 
+## Local workflow testing with act
+
+[`act`](https://github.com/nektos/act) runs GitHub Actions locally in Docker, so you can test the Discord workflow without pushing.
+
+On Windows, install `act` with one of:
+
+```powershell
+winget install nektos.act
+# or
+choco install act-cli
+```
+
+Create a local secret file and add your Discord webhook URL:
+
+```powershell
+Copy-Item .secrets.example .secrets
+notepad .secrets
+```
+
+The `.secrets` file is gitignored. Do not commit real webhook URLs.
+
+Run all local workflow fixtures with one command:
+
+```bash
+npm run act:test
+```
+
+This runs `fixtures/push.json` and `fixtures/push-anon.json` sequentially through `.github/workflows/discord-push.yml` using `.secrets`. The script exits non-zero if `.secrets` is missing or any fixture run fails.
+
+The first run may take a while because Docker pulls the local runner image.
+
+Optional direct `act` commands for debugging a single fixture:
+
+```powershell
+act push -W .github/workflows/discord-push.yml --eventpath fixtures/push.json --secret-file .secrets
+act push -W .github/workflows/discord-push.yml --eventpath fixtures/push-anon.json --secret-file .secrets
+```
+
 ## License
 
 MIT
