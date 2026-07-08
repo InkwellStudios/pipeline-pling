@@ -20,6 +20,7 @@ const DISCORD_WEBHOOK_USERNAME_MAX_LENGTH = 80;
 const GITHUB_AVATAR_SIZE = 256;
 const CO_AUTHOR_REGEX = /^Co-authored-by:\s*(.+?)\s*<([^>]+)>\s*$/gim;
 const NOREPLY_EMAIL_REGEX = /^(?:\d+\+)?([^@]+)@users\.noreply\.github\.com$/i;
+const PR_REF_REGEX = /\(#(\d+)\)/g;
 
 export function parseBranch(ref: string): string {
   const prefix = 'refs/heads/';
@@ -108,6 +109,37 @@ export function truncate(text: string, maxLength: number): string {
   return `${text.slice(0, maxLength - 3)}...`;
 }
 
+export function linkPrReferences(title: string, repoHtmlUrl: string): string {
+  const repoUrl = repoHtmlUrl.replace(/\/$/, '');
+  return title.replace(
+    PR_REF_REGEX,
+    (_, num) => `([#${num}](${repoUrl}/pull/${num}))`,
+  );
+}
+
+export function formatCommitTitle(
+  message: string,
+  maxTitleLength: number,
+  repoHtmlUrl: string,
+): string {
+  const rawTitle = getCommitTitle(message);
+  const trailingPrMatch = rawTitle.match(/\s*\(#\d+\)\s*$/);
+
+  if (!trailingPrMatch) {
+    return linkPrReferences(truncate(rawTitle, maxTitleLength), repoHtmlUrl);
+  }
+
+  const prSuffix = trailingPrMatch[0];
+  const baseTitle = rawTitle.slice(0, -prSuffix.length).trimEnd();
+  const maxBaseLength = maxTitleLength - prSuffix.length;
+
+  if (maxBaseLength <= 0) {
+    return linkPrReferences(truncate(rawTitle, maxTitleLength), repoHtmlUrl);
+  }
+
+  return linkPrReferences(truncate(baseTitle, maxBaseLength) + prSuffix, repoHtmlUrl);
+}
+
 export function isAnonymousCommit(message: string, anonKeyword: string): boolean {
   return message.includes(anonKeyword);
 }
@@ -154,6 +186,7 @@ function formatCommitLine(
   anonymousIndex: number | undefined,
   maxTitleLength: number,
   maxDescriptionLength: number,
+  repoHtmlUrl: string,
 ): string {
   if (isAnonymousCommit(commit.message, anonKeyword)) {
     if (anonymousIndex === 1) {
@@ -164,7 +197,7 @@ function formatCommitLine(
   }
 
   const shortSha = commit.id.slice(0, 7);
-  const title = truncate(getCommitTitle(commit.message), maxTitleLength);
+  const title = formatCommitTitle(commit.message, maxTitleLength, repoHtmlUrl);
   const attributionText = formatCommitAttribution(
     commit.author,
     parseCoAuthors(commit.message),
@@ -246,6 +279,7 @@ function buildCommitLines(
   maxCommits: number,
   maxTitleLength: number,
   maxDescriptionLength: number,
+  repoHtmlUrl: string,
 ): string[] {
   const lines: string[] = [];
   let anonymousCounter = 0;
@@ -268,6 +302,7 @@ function buildCommitLines(
         anonymous ? anonymousCounter : undefined,
         maxTitleLength,
         maxDescriptionLength,
+        repoHtmlUrl,
       ),
     );
   }
@@ -329,6 +364,7 @@ export function buildDiscordMessage(
     maxCommits,
     maxTitleLength,
     maxDescriptionLength,
+    payload.repository.html_url,
   );
   const commitContent = trimLinesToMaxLength(lines, maxTextLength).join('\n');
 

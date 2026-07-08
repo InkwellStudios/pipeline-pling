@@ -3,11 +3,13 @@ import { describe, expect, it } from 'vitest';
 import {
   buildDiscordMessage,
   formatCommitAttribution,
+  formatCommitTitle,
   formatGitHubUser,
   getCommitDescription,
   getCommitTitle,
   isAnonymousCommit,
   isMeaningfullyDifferent,
+  linkPrReferences,
   parseBranch,
   parseCoAuthors,
   resolveUsername,
@@ -339,7 +341,10 @@ Co-authored-by: ChatDisabled <44729807+ChatDisabled@users.noreply.github.com>`,
       '[`45d8485`](https://github.com/Qbox-project/qbx_core/commit/45d84858f282f736f64123f396474b37cfb3f2c4)',
     );
     expect(commitContent).toContain(
-      'fix(bridge/qb): correct vehicle prop/colour mapping, 12h clock and Ki...',
+      '([#758](https://github.com/Qbox-project/qbx_core/pull/758))',
+    );
+    expect(commitContent).toContain(
+      'fix(bridge/qb): correct vehicle prop/colour mapping, 12h clock...',
     );
     expect(commitContent).toContain(
       '> * fix(bridge/qb): correct vehicle prop/colour mapping, 12h clock and Kick loop',
@@ -491,5 +496,53 @@ Body line
 Co-authored-by: Jane Doe <123456+janedoe@users.noreply.github.com>`);
 
     expect(description).toBe('Body line');
+  });
+});
+
+describe('linkPrReferences', () => {
+  const repoUrl = 'https://github.com/Qbox-project/qbx_core';
+
+  it('replaces (#N) with Discord markdown PR links', () => {
+    expect(linkPrReferences('fix: something (#758)', repoUrl)).toBe(
+      'fix: something ([#758](https://github.com/Qbox-project/qbx_core/pull/758))',
+    );
+  });
+
+  it('replaces multiple PR references', () => {
+    expect(linkPrReferences('merge: a (#1) and (#2)', repoUrl)).toBe(
+      'merge: a ([#1](https://github.com/Qbox-project/qbx_core/pull/1)) and ([#2](https://github.com/Qbox-project/qbx_core/pull/2))',
+    );
+  });
+
+  it('strips trailing slash from repo URL', () => {
+    expect(linkPrReferences('fix (#99)', `${repoUrl}/`)).toBe(
+      'fix ([#99](https://github.com/Qbox-project/qbx_core/pull/99))',
+    );
+  });
+});
+
+describe('formatCommitTitle', () => {
+  const repoUrl = 'https://github.com/Qbox-project/qbx_core';
+
+  it('truncates base title while preserving linked PR ref at end', () => {
+    const message = `fix(bridge/qb): correct vehicle prop/colour mapping, 12h clock and Ki… (#758)
+
+body`;
+
+    const title = formatCommitTitle(message, 72, repoUrl);
+
+    expect(title).toContain('([#758](https://github.com/Qbox-project/qbx_core/pull/758))');
+    expect(title).toContain(
+      'fix(bridge/qb): correct vehicle prop/colour mapping, 12h clock...',
+    );
+    expect(title.replace(/\[[^\]]+\]\([^)]+\)/g, (match) => {
+      const labelMatch = match.match(/^\[([^\]]+)\]/);
+      return labelMatch?.[1] ?? match;
+    }).length).toBeLessThanOrEqual(72);
+  });
+
+  it('truncates plain titles without PR refs as before', () => {
+    expect(formatCommitTitle('short title', 72, repoUrl)).toBe('short title');
+    expect(formatCommitTitle('x'.repeat(80), 72, repoUrl)).toHaveLength(72);
   });
 });
