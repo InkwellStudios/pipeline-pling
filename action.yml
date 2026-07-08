@@ -19,6 +19,23 @@ inputs:
     description: Commit message keyword that marks a commit as anonymous in Discord output
     required: false
     default: '!anon'
+  accent-color:
+    description: Optional hex accent color for the Discord container (e.g. #F1E542 or F1E542). Falls back to a deterministic hash color when omitted or invalid.
+    required: false
+  use-sender-avatar:
+    description: When true, set the webhook avatar to the push sender's GitHub avatar
+    required: false
+    default: 'true'
+  use-repo-username:
+    description: When true, set the webhook username to the repository name
+    required: false
+    default: 'true'
+  name-anon-users:
+    description: Comma-separated GitHub usernames whose display names are anonymized (author, co-author, or pusher) while commit details remain visible
+    required: false
+  full-anon-users:
+    description: Comma-separated GitHub usernames whose commits are fully redacted (same as the anon keyword) when they are author or co-author
+    required: false
 
 runs:
   using: node24

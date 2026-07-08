@@ -15,6 +15,38 @@ Post GitHub push commit notifications to Discord using the Components V2 message
 - Skips empty pushes and bot pushes (configurable)
 - Clear webhook failure errors on non-2xx responses
 
+## Examples
+
+### Default push
+
+Linked SHAs, commit titles, author lines, per-repo accent color, and a **View changes** button.
+
+![Default push notification](screenshots/default.png)
+
+### Co-authored commits
+
+Multi-commit pushes with linked authors, co-authors, PR references, and quoted commit bodies.
+
+![Co-authored commits](screenshots/coauthors.png)
+
+### Keyword anonymization
+
+Put `!anon` on the first line of the commit body to fully redact that commit. When every commit in the push is anonymous, the **View changes** button is omitted.
+
+![Keyword anonymization](screenshots/keywordanon.png)
+
+### Name anonymization
+
+List GitHub usernames in `name-anon-users` to replace their display names with `Anonymous` while keeping commit details visible.
+
+![Name anonymization](screenshots/nameanon.png)
+
+### Full anonymization
+
+List GitHub usernames in `full-anon-users` to fully redact any commit they author or co-author. Mixed pushes show redacted and normal commits side by side.
+
+![Full anonymization](screenshots/fullanon.png)
+
 ## Usage
 
 ```yaml
@@ -25,6 +57,11 @@ Post GitHub push commit notifications to Discord using the Components V2 message
     thread-id: ${{ vars.DISCORD_THREAD_ID }} # optional
     skip-bots: true # default
     anon-keyword: '!anon' # default
+    accent-color: '#F1E542' # optional
+    use-sender-avatar: true # default
+    use-repo-username: true # default
+    name-anon-users: 'alice,bob' # optional
+    full-anon-users: 'secret-user' # optional
 ```
 
 ## Inputs
@@ -35,8 +72,17 @@ Post GitHub push commit notifications to Discord using the Components V2 message
 | `thread-id` | no | | Optional forum thread ID |
 | `skip-bots` | no | `true` | Skip notifications for bot senders |
 | `anon-keyword` | no | `!anon` | Keyword that marks a commit as anonymous in Discord output |
+| `accent-color` | no | | Optional hex accent color for the container (e.g. `#F1E542` or `F1E542`). Invalid values log a warning and fall back to a deterministic hash color from the repository name |
+| `use-sender-avatar` | no | `true` | When `false`, omit `avatar_url` so Discord uses the webhook's configured avatar |
+| `use-repo-username` | no | `true` | When `false`, omit `username` so Discord uses the webhook's configured name |
+| `name-anon-users` | no | | Comma-separated GitHub usernames whose display names are anonymized in the header, commit author lines, and co-author lines |
+| `full-anon-users` | no | | Comma-separated GitHub usernames whose commits are fully redacted when they are the author or a co-author |
 
-## Anonymous commits
+## Anonymization
+
+Pipeline Pling supports three complementary anonymization modes. They can be combined in the same workflow.
+
+### Keyword anonymization (`anon-keyword`)
 
 If a commit message puts the anonymous keyword on the first line of the commit body, Discord output redacts the commit title, body, SHA, links, and all author/co-author/committer details. Anonymous commits render as `` `Anonymous commit` ``.
 
@@ -51,6 +97,22 @@ fix(items.lua): typo but also no
 When every commit in the push is anonymous, commit details are still redacted and the **View changes** button is omitted.
 
 When only some commits are anonymous, non-anonymous commits render normally, but branch and compare links are still omitted so anonymous commits cannot be discovered from the notification.
+
+### Name anonymization (`name-anon-users`)
+
+Provide a comma-separated list of GitHub usernames. Matching is case-insensitive and ignores empty entries.
+
+When a listed user appears as the push sender, commit author, or co-author, their display name is rendered as `Anonymous` with no profile hyperlink. Commit SHAs, titles, and descriptions still render normally unless another anonymization mode applies.
+
+When a listed user is the push sender and avatars are enabled (`use-sender-avatar: true`), the notification uses the anonymous silhouette avatar instead of their GitHub profile picture.
+
+### Full anonymization (`full-anon-users`)
+
+Provide a comma-separated list of GitHub usernames. Any commit whose author or co-author matches a listed user is fully redacted exactly like keyword anonymization: `` `Anonymous commit` `` with no SHA, title, description, or profile links.
+
+When a listed user is the push sender, the header actor becomes `**Anonymous**` (no link) and the anonymous avatar is used when avatars are enabled.
+
+A commit is treated as anonymous if **either** the keyword matches **or** the author/co-author is in the full-anon list. Mixed pushes omit the **View changes** button and use a plain branch label when any commit is anonymous.
 
 ## Development
 
@@ -88,16 +150,28 @@ Run all local workflow fixtures with one command:
 npm run act:test
 ```
 
-This runs `fixtures/push.json`, `fixtures/push-anon.json`, and `fixtures/push-coauthors.json` sequentially through `.github/workflows/discord-push.yml` using `.secrets`. The script exits non-zero if `.secrets` is missing or any fixture run fails.
+This runs six scenarios sequentially through act using `.secrets`. Each scenario posts a real Discord message so you can visually inspect the output — see [Examples](#examples) for reference screenshots. The script exits non-zero if `.secrets` is missing or any scenario fails.
+
+| Scenario | Workflow | Fixture | What to look for |
+| --- | --- | --- | --- |
+| `push` | `discord-push.yml` | `push.json` | Default inputs — linked authors, repo hash accent color, sender avatar and repo username |
+| `push-anon` | `discord-push.yml` | `push-anon.json` | Keyword anonymization (`!anon`) — redacted commits, no View changes button |
+| `push-coauthors` | `discord-push.yml` | `push-coauthors.json` | Co-authored commits with linked author and co-author lines |
+| `push-name-anon` | `discord-push-name-anon.yml` | `push-name-anon.json` | `name-anon-users: ChatDisabled,WhereiamL` — Anonymous header/avatars/names, commits still visible; includes co-author |
+| `push-full-anon` | `discord-push-full-anon.yml` | `push-full-anon.json` | `full-anon-users: WhereiamL` — one fully redacted commit mixed with a normal commit |
+| `push-custom` | `discord-push-custom.yml` | `push.json` | `accent-color: #E74C3C`, `use-sender-avatar: false`, `use-repo-username: false` — red accent, webhook default name/avatar |
+
+Act-only workflows (`discord-push-name-anon.yml`, `discord-push-full-anon.yml`, `discord-push-custom.yml`) use placeholder branch filters (`__act_only_*__`) so they do not run on real pushes to `main`.
 
 The first run may take a while because Docker pulls the local runner image.
 
-Optional direct `act` commands for debugging a single fixture:
+Optional direct `act` commands for debugging a single scenario:
 
 ```powershell
 act push -W .github/workflows/discord-push.yml --eventpath fixtures/push.json --secret-file .secrets
-act push -W .github/workflows/discord-push.yml --eventpath fixtures/push-anon.json --secret-file .secrets
-act push -W .github/workflows/discord-push.yml --eventpath fixtures/push-coauthors.json --secret-file .secrets
+act push -W .github/workflows/discord-push-name-anon.yml --eventpath fixtures/push-name-anon.json --secret-file .secrets
+act push -W .github/workflows/discord-push-full-anon.yml --eventpath fixtures/push-full-anon.json --secret-file .secrets
+act push -W .github/workflows/discord-push-custom.yml --eventpath fixtures/push.json --secret-file .secrets
 ```
 
 ## License

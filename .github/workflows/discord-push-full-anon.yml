@@ -1,0 +1,19 @@
+# act-only: full-anon-users scenario (branch never pushed in CI)
+name: Discord Push Notification (act full-anon)
+
+on:
+  push:
+    branches: [__act_only_full_anon__]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Notify Discord
+        uses: ./
+        with:
+          webhook-url: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          thread-id: ${{ vars.DISCORD_THREAD_ID }}
+          full-anon-users: WhereiamL

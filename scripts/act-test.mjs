@@ -7,11 +7,47 @@ import { fileURLToPath } from "node:url";
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const secretsFile = join(rootDir, ".secrets");
-const workflowFile = join(rootDir, ".github", "workflows", "discord-push.yml");
-const fixtures = [
-  { label: "push", path: join(rootDir, "fixtures", "push.json") },
-  { label: "push-anon", path: join(rootDir, "fixtures", "push-anon.json") },
-  { label: "push-coauthors", path: join(rootDir, "fixtures", "push-coauthors.json") },
+const workflowsDir = join(rootDir, ".github", "workflows");
+const fixturesDir = join(rootDir, "fixtures");
+
+/** @type {{ label: string; description: string; workflow: string; fixture: string }[]} */
+const scenarios = [
+  {
+    label: "push",
+    description: "default inputs — multi-commit push with linked authors",
+    workflow: "discord-push.yml",
+    fixture: "push.json",
+  },
+  {
+    label: "push-anon",
+    description: "default inputs — keyword anonymization (!anon)",
+    workflow: "discord-push.yml",
+    fixture: "push-anon.json",
+  },
+  {
+    label: "push-coauthors",
+    description: "default inputs — co-authored commits",
+    workflow: "discord-push.yml",
+    fixture: "push-coauthors.json",
+  },
+  {
+    label: "push-name-anon",
+    description: "name-anon-users — sender + authors anonymized, commits visible",
+    workflow: "discord-push-name-anon.yml",
+    fixture: "push-name-anon.json",
+  },
+  {
+    label: "push-full-anon",
+    description: "full-anon-users — mixed push with full commit redaction",
+    workflow: "discord-push-full-anon.yml",
+    fixture: "push-full-anon.json",
+  },
+  {
+    label: "push-custom",
+    description: "accent-color + use-sender-avatar/use-repo-username disabled",
+    workflow: "discord-push-custom.yml",
+    fixture: "push.json",
+  },
 ];
 
 function fail(message) {
@@ -19,8 +55,14 @@ function fail(message) {
   process.exit(1);
 }
 
-function runAct(fixture) {
-  console.log(`\n=== act: ${fixture.label} (${fixture.path}) ===\n`);
+function runAct(scenario) {
+  const workflowFile = join(workflowsDir, scenario.workflow);
+  const fixturePath = join(fixturesDir, scenario.fixture);
+
+  console.log(`\n=== act: ${scenario.label} ===`);
+  console.log(`Scenario:  ${scenario.description}`);
+  console.log(`Workflow:  ${workflowFile}`);
+  console.log(`Fixture:   ${fixturePath}\n`);
 
   const result = spawnSync(
     "act",
@@ -29,7 +71,7 @@ function runAct(fixture) {
       "-W",
       workflowFile,
       "--eventpath",
-      fixture.path,
+      fixturePath,
       "--secret-file",
       secretsFile,
     ],
@@ -46,10 +88,10 @@ function runAct(fixture) {
   }
 
   if (result.status !== 0) {
-    fail(`act exited with status ${result.status} for fixture "${fixture.label}"`);
+    fail(`act exited with status ${result.status} for scenario "${scenario.label}"`);
   }
 
-  console.log(`\n=== passed: ${fixture.label} ===\n`);
+  console.log(`\n=== passed: ${scenario.label} ===\n`);
 }
 
 if (!existsSync(secretsFile)) {
@@ -64,23 +106,28 @@ if (!existsSync(secretsFile)) {
   );
 }
 
-for (const fixture of fixtures) {
-  if (!existsSync(fixture.path)) {
-    fail(`missing fixture file: ${fixture.path}`);
+for (const scenario of scenarios) {
+  const workflowFile = join(workflowsDir, scenario.workflow);
+  const fixturePath = join(fixturesDir, scenario.fixture);
+
+  if (!existsSync(workflowFile)) {
+    fail(`missing workflow file: ${workflowFile}`);
+  }
+
+  if (!existsSync(fixturePath)) {
+    fail(`missing fixture file: ${fixturePath}`);
   }
 }
 
-if (!existsSync(workflowFile)) {
-  fail(`missing workflow file: ${workflowFile}`);
-}
-
 console.log("Running Discord push workflow locally with act...");
-console.log(`Workflow: ${workflowFile}`);
-console.log(`Secrets:  ${secretsFile}`);
-console.log(`Fixtures: ${fixtures.map((fixture) => fixture.label).join(", ")}`);
-
-for (const fixture of fixtures) {
-  runAct(fixture);
+console.log(`Secrets: ${secretsFile}`);
+console.log(`Scenarios (${scenarios.length}):`);
+for (const scenario of scenarios) {
+  console.log(`  - ${scenario.label}: ${scenario.description}`);
 }
 
-console.log("All act fixtures passed.");
+for (const scenario of scenarios) {
+  runAct(scenario);
+}
+
+console.log("All act scenarios passed.");

@@ -1,5 +1,19 @@
 import { ACCENT_COLOR } from './types.js';
 
+export function parseHexColor(input: string): number | undefined {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const hex = trimmed.startsWith('#') ? trimmed.slice(1) : trimmed;
+  if (!/^[0-9A-Fa-f]{6}$/.test(hex)) {
+    return undefined;
+  }
+
+  return Number.parseInt(hex, 16);
+}
+
 function hslToAccentColor(hue: number, saturation: number, lightness: number): number {
   const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
   const intermediate =

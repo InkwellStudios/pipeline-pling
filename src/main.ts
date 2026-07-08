@@ -1,8 +1,9 @@
 import * as core from '@actions/core';
 import * as github from '@actions/github';
 
+import { parseHexColor } from './color.js';
 import { sendDiscordWebhook } from './discord.js';
-import { buildDiscordMessage, shouldSkipPush } from './message.js';
+import { buildDiscordMessage, parseUsernameList, shouldSkipPush } from './message.js';
 import type { PushPayload } from './types.js';
 
 export async function run(): Promise<void> {
@@ -16,6 +17,23 @@ export async function run(): Promise<void> {
   const anonKeyword = core.getInput('anon-keyword') || '!anon';
   const webhookUrl = core.getInput('webhook-url', { required: true });
   const threadId = core.getInput('thread-id');
+  const useSenderAvatar = core.getBooleanInput('use-sender-avatar');
+  const useRepoUsername = core.getBooleanInput('use-repo-username');
+  const nameAnonUsers = parseUsernameList(core.getInput('name-anon-users'));
+  const fullAnonUsers = parseUsernameList(core.getInput('full-anon-users'));
+
+  const accentColorInput = core.getInput('accent-color');
+  let accentColor: number | undefined;
+  if (accentColorInput) {
+    const parsed = parseHexColor(accentColorInput);
+    if (parsed !== undefined) {
+      accentColor = parsed;
+    } else {
+      core.warning(
+        `Invalid accent-color "${accentColorInput}"; falling back to repository hash color.`,
+      );
+    }
+  }
 
   const skipReason = shouldSkipPush(payload, skipBots);
   if (skipReason) {
@@ -23,7 +41,14 @@ export async function run(): Promise<void> {
     return;
   }
 
-  const message = buildDiscordMessage(payload, { anonKeyword });
+  const message = buildDiscordMessage(payload, {
+    anonKeyword,
+    accentColor,
+    useSenderAvatar,
+    useRepoUsername,
+    nameAnonUsers,
+    fullAnonUsers,
+  });
 
   core.info(
     `Sending Discord notification for ${payload.commits.length} commit(s) to ${payload.repository.full_name}.`,

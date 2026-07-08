@@ -7,6 +7,7 @@ import type {
 } from './types.js';
 import { colorFromRepoName } from './color.js';
 import {
+  ANONYMOUS_AVATAR_URL,
   IS_COMPONENTS_V2,
 } from './types.js';
 
@@ -42,7 +43,40 @@ export function resolveUsername(user: GitHubUser): string | undefined {
   return match?.[1];
 }
 
-export function formatGitHubUser(user: GitHubUser): string {
+export function parseUsernameList(input: string): string[] {
+  return input
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => entry.toLowerCase());
+}
+
+function isUserInAnonList(user: GitHubUser, anonUsers: string[]): boolean {
+  if (anonUsers.length === 0) {
+    return false;
+  }
+
+  const username = resolveUsername(user);
+  return username !== undefined && anonUsers.includes(username.toLowerCase());
+}
+
+function isSenderAnonymized(
+  senderLogin: string,
+  nameAnonUsers: string[],
+  fullAnonUsers: string[],
+): boolean {
+  const login = senderLogin.toLowerCase();
+  return nameAnonUsers.includes(login) || fullAnonUsers.includes(login);
+}
+
+export function formatGitHubUser(
+  user: GitHubUser,
+  nameAnonUsers: string[] = [],
+): string {
+  if (isUserInAnonList(user, nameAnonUsers)) {
+    return 'Anonymous';
+  }
+
   const username = resolveUsername(user);
   if (username) {
     return `[${user.name}](https://github.com/${username})`;
@@ -161,20 +195,48 @@ export function isAnonymousCommit(message: string, anonKeyword: string): boolean
   return false;
 }
 
+export function isCommitFullyAnonymous(
+  commit: PushCommit,
+  anonKeyword: string,
+  fullAnonUsers: string[],
+): boolean {
+  if (isAnonymousCommit(commit.message, anonKeyword)) {
+    return true;
+  }
+
+  if (isUserInAnonList(commit.author, fullAnonUsers)) {
+    return true;
+  }
+
+  return parseCoAuthors(commit.message).some((coAuthor) =>
+    isUserInAnonList(
+      {
+        name: coAuthor.name,
+        email: coAuthor.email,
+      },
+      fullAnonUsers,
+    ),
+  );
+}
+
 export function formatCommitAttribution(
   author: GitHubUser,
   coAuthors: ParsedCoAuthor[],
+  nameAnonUsers: string[] = [],
 ): string {
-  const authorText = formatGitHubUser(author);
+  const authorText = formatGitHubUser(author, nameAnonUsers);
   const peopleText =
     coAuthors.length === 0
       ? authorText
       : `${authorText} & ${coAuthors
           .map((coAuthor) =>
-            formatGitHubUser({
-              name: coAuthor.name,
-              email: coAuthor.email,
-            }),
+            formatGitHubUser(
+              {
+                name: coAuthor.name,
+                email: coAuthor.email,
+              },
+              nameAnonUsers,
+            ),
           )
           .join(', ')}`;
 
@@ -198,11 +260,13 @@ function formatCommitDescription(message: string, maxDescriptionLength: number):
 function formatCommitLine(
   commit: PushCommit,
   anonKeyword: string,
+  fullAnonUsers: string[],
+  nameAnonUsers: string[],
   maxTitleLength: number,
   maxDescriptionLength: number,
   repoHtmlUrl: string,
 ): string {
-  if (isAnonymousCommit(commit.message, anonKeyword)) {
+  if (isCommitFullyAnonymous(commit, anonKeyword, fullAnonUsers)) {
     return '`Anonymous commit`';
   }
 
@@ -211,6 +275,7 @@ function formatCommitLine(
   const attributionText = formatCommitAttribution(
     commit.author,
     parseCoAuthors(commit.message),
+    nameAnonUsers,
   );
   const descriptionText = formatCommitDescription(
     commit.message,
@@ -225,6 +290,8 @@ function buildHeader(
   branch: string,
   commitCount: number,
   hasMixedAnonymous: boolean,
+  nameAnonUsers: string[],
+  fullAnonUsers: string[],
 ): string {
   const repo = payload.repository.full_name;
   const branchUrl = buildBranchUrl(payload.repository.html_url, branch);
@@ -232,9 +299,15 @@ function buildHeader(
     ? `\`${repo}/${branch}\``
     : `[\`${repo}/${branch}\`](${branchUrl})`;
   const commitLabel = commitCount === 1 ? 'commit' : 'commits';
-  const actor = payload.sender.login;
+  const actor = isSenderAnonymized(
+    payload.sender.login,
+    nameAnonUsers,
+    fullAnonUsers,
+  )
+    ? '**Anonymous**'
+    : `**[${payload.sender.login}](https://github.com/${payload.sender.login})**`;
 
-  return `**[${actor}](https://github.com/${actor})** is pushing ${commitCount} ${commitLabel} to ${branchLabel}`;
+  return `${actor} is pushing ${commitCount} ${commitLabel} to ${branchLabel}`;
 }
 
 function withGitHubAvatarSize(avatarUrl: string): string {
@@ -269,7 +342,15 @@ function getRepositoryName(payload: PushPayload): string {
   return truncate(repoName, DISCORD_WEBHOOK_USERNAME_MAX_LENGTH);
 }
 
-function buildWebhookAvatarUrl(payload: PushPayload): string {
+function buildWebhookAvatarUrl(
+  payload: PushPayload,
+  nameAnonUsers: string[],
+  fullAnonUsers: string[],
+): string {
+  if (isSenderAnonymized(payload.sender.login, nameAnonUsers, fullAnonUsers)) {
+    return ANONYMOUS_AVATAR_URL;
+  }
+
   const avatarUrl = payload.sender.avatar_url ?? buildGitHubAvatarUrl(payload.sender.login);
 
   return withGitHubAvatarSize(avatarUrl);
@@ -278,6 +359,8 @@ function buildWebhookAvatarUrl(payload: PushPayload): string {
 function buildCommitLines(
   commits: PushCommit[],
   anonKeyword: string,
+  fullAnonUsers: string[],
+  nameAnonUsers: string[],
   maxCommits: number,
   maxTitleLength: number,
   maxDescriptionLength: number,
@@ -295,6 +378,8 @@ function buildCommitLines(
       formatCommitLine(
         commit,
         anonKeyword,
+        fullAnonUsers,
+        nameAnonUsers,
         maxTitleLength,
         maxDescriptionLength,
         repoHtmlUrl,
@@ -331,6 +416,10 @@ export function buildDiscordMessage(
   options: BuildMessageOptions = {},
 ): DiscordComponentsMessage {
   const anonKeyword = options.anonKeyword ?? DEFAULT_ANON_KEYWORD;
+  const useSenderAvatar = options.useSenderAvatar ?? true;
+  const useRepoUsername = options.useRepoUsername ?? true;
+  const nameAnonUsers = (options.nameAnonUsers ?? []).map((user) => user.toLowerCase());
+  const fullAnonUsers = (options.fullAnonUsers ?? []).map((user) => user.toLowerCase());
   const maxCommits = options.maxCommits ?? DEFAULT_MAX_COMMITS;
   const maxTextLength = options.maxTextLength ?? DEFAULT_MAX_TEXT_LENGTH;
   const maxTitleLength = options.maxTitleLength ?? DEFAULT_MAX_TITLE_LENGTH;
@@ -340,16 +429,27 @@ export function buildDiscordMessage(
   const branch = parseBranch(payload.ref);
   const commits = payload.commits;
   const hasAnonymous = commits.some((commit) =>
-    isAnonymousCommit(commit.message, anonKeyword),
+    isCommitFullyAnonymous(commit, anonKeyword, fullAnonUsers),
   );
   const hasMixedAnonymous =
     hasAnonymous &&
-    !commits.every((commit) => isAnonymousCommit(commit.message, anonKeyword));
+    !commits.every((commit) =>
+      isCommitFullyAnonymous(commit, anonKeyword, fullAnonUsers),
+    );
 
-  const header = buildHeader(payload, branch, commits.length, hasMixedAnonymous);
+  const header = buildHeader(
+    payload,
+    branch,
+    commits.length,
+    hasMixedAnonymous,
+    nameAnonUsers,
+    fullAnonUsers,
+  );
   const lines = buildCommitLines(
     commits,
     anonKeyword,
+    fullAnonUsers,
+    nameAnonUsers,
     maxCommits,
     maxTitleLength,
     maxDescriptionLength,
@@ -390,9 +490,10 @@ export function buildDiscordMessage(
     });
   }
 
-  return {
-    username: getRepositoryName(payload),
-    avatar_url: buildWebhookAvatarUrl(payload),
+  const accentColor =
+    options.accentColor ?? colorFromRepoName(payload.repository.full_name);
+
+  const message: DiscordComponentsMessage = {
     flags: IS_COMPONENTS_V2,
     allowed_mentions: {
       parse: [],
@@ -400,11 +501,25 @@ export function buildDiscordMessage(
     components: [
       {
         type: 17,
-        accent_color: colorFromRepoName(payload.repository.full_name),
+        accent_color: accentColor,
         components: containerComponents,
       },
     ],
   };
+
+  if (useRepoUsername) {
+    message.username = getRepositoryName(payload);
+  }
+
+  if (useSenderAvatar) {
+    message.avatar_url = buildWebhookAvatarUrl(
+      payload,
+      nameAnonUsers,
+      fullAnonUsers,
+    );
+  }
+
+  return message;
 }
 
 export function shouldSkipPush(

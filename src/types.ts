@@ -78,6 +78,11 @@ export interface DiscordComponentsMessage {
 
 export interface BuildMessageOptions {
   anonKeyword?: string;
+  accentColor?: number;
+  useSenderAvatar?: boolean;
+  useRepoUsername?: boolean;
+  nameAnonUsers?: string[];
+  fullAnonUsers?: string[];
   maxCommits?: number;
   maxTextLength?: number;
   maxTitleLength?: number;

@@ -10,14 +10,17 @@ import {
   getCommitDescription,
   getCommitTitle,
   isAnonymousCommit,
+  isCommitFullyAnonymous,
   isMeaningfullyDifferent,
   linkPrReferences,
   parseBranch,
   parseCoAuthors,
+  parseUsernameList,
   resolveUsername,
   shouldSkipPush,
   truncate,
 } from '../message.js';
+import { ANONYMOUS_AVATAR_URL } from '../types.js';
 import type { PushCommit, PushPayload } from '../types.js';
 
 function makeCommit(overrides: Partial<PushCommit> = {}): PushCommit {
@@ -213,6 +216,68 @@ describe('formatGitHubUser', () => {
         email: '123456+janedoe@users.noreply.github.com',
       }),
     ).toBe('[Jane Doe](https://github.com/janedoe)');
+  });
+
+  it('renders Anonymous without a profile link for name-anon users', () => {
+    expect(
+      formatGitHubUser(
+        {
+          name: 'ChatDisabled',
+          email: '44729807+ChatDisabled@users.noreply.github.com',
+          username: 'ChatDisabled',
+        },
+        ['chatdisabled'],
+      ),
+    ).toBe('Anonymous');
+  });
+});
+
+describe('parseUsernameList', () => {
+  it('parses comma-separated usernames case-insensitively', () => {
+    expect(parseUsernameList(' Alice, bob , ,Charlie ')).toEqual([
+      'alice',
+      'bob',
+      'charlie',
+    ]);
+  });
+
+  it('returns an empty list for blank input', () => {
+    expect(parseUsernameList('')).toEqual([]);
+    expect(parseUsernameList('  ,  ')).toEqual([]);
+  });
+});
+
+describe('isCommitFullyAnonymous', () => {
+  it('treats keyword commits as fully anonymous', () => {
+    expect(
+      isCommitFullyAnonymous(
+        makeCommit({ message: 'feat: hide\n\n!anon' }),
+        '!anon',
+        [],
+      ),
+    ).toBe(true);
+  });
+
+  it('treats full-anon authors and co-authors as fully anonymous', () => {
+    expect(
+      isCommitFullyAnonymous(makeCommit(), '!anon', ['chatdisabled']),
+    ).toBe(true);
+    expect(
+      isCommitFullyAnonymous(
+        makeCommit({
+          author: {
+            name: 'Whereiam',
+            email: '84282589+WhereiamL@users.noreply.github.com',
+            username: 'WhereiamL',
+          },
+          message: `feat: thing
+
+Co-authored-by: ChatDisabled <44729807+ChatDisabled@users.noreply.github.com>`,
+        }),
+        '!anon',
+        ['chatdisabled'],
+      ),
+    ).toBe(true);
   });
 });
 
@@ -479,6 +544,155 @@ Co-authored-by: ChatDisabled <44729807+ChatDisabled@users.noreply.github.com>`,
 
     expect((commitContent.match(/\*by\*/g) ?? []).length).toBe(10);
     expect(commitContent).toContain('+ 2 more...');
+  });
+
+  it('uses a custom accent color when provided', () => {
+    const message = buildDiscordMessage(makePayload(), { accentColor: 0xff00aa });
+
+    expect(message.components[0].accent_color).toBe(0xff00aa);
+  });
+
+  it('falls back to the repository hash color when accent color is omitted', () => {
+    const message = buildDiscordMessage(makePayload());
+
+    expect(message.components[0].accent_color).toBe(
+      colorFromRepoName('Qbox-project/txAdminRecipe'),
+    );
+  });
+
+  it('omits avatar_url when useSenderAvatar is false', () => {
+    const message = buildDiscordMessage(makePayload(), { useSenderAvatar: false });
+
+    expect(message.avatar_url).toBeUndefined();
+  });
+
+  it('omits username when useRepoUsername is false', () => {
+    const message = buildDiscordMessage(makePayload(), { useRepoUsername: false });
+
+    expect(message.username).toBeUndefined();
+  });
+
+  it('anonymizes matched author names while keeping commit details visible', () => {
+    const payload = makePayload({
+      commits: [
+        makeCommit({
+          message: 'fix(items.lua): typo but also no',
+        }),
+      ],
+    });
+
+    const message = buildDiscordMessage(payload, {
+      nameAnonUsers: ['ChatDisabled'],
+    });
+    const commitContent = getCommitContent(message);
+
+    expect(commitContent).toContain(
+      '[`04ea116`](https://github.com/Qbox-project/txAdminRecipe/commit/04ea116975c20db99cd710337d0bc7ce90e13a65)',
+    );
+    expect(commitContent).toContain('fix(items.lua): typo but also no');
+    expect(commitContent).toContain('*by* Anonymous');
+    expect(commitContent).not.toContain('github.com/ChatDisabled');
+    expect(hasViewChangesButton(message)).toBe(true);
+  });
+
+  it('anonymizes the header actor and avatar for name-anon senders', () => {
+    const message = buildDiscordMessage(makePayload(), {
+      nameAnonUsers: ['chatdisabled'],
+    });
+    const header = getHeaderContent(message);
+
+    expect(header).toContain('**Anonymous** is pushing');
+    expect(header).not.toContain('github.com/ChatDisabled');
+    expect(message.avatar_url).toBe(ANONYMOUS_AVATAR_URL);
+  });
+
+  it('fully redacts commits from full-anon users', () => {
+    const payload = makePayload({
+      commits: [
+        makeCommit({
+          message: 'fix(items.lua): typo but also no',
+        }),
+      ],
+    });
+
+    const message = buildDiscordMessage(payload, {
+      fullAnonUsers: ['ChatDisabled'],
+    });
+    const commitContent = getCommitContent(message);
+    const serialized = JSON.stringify(message);
+
+    expect(commitContent).toBe('`Anonymous commit`');
+    expect(serialized).not.toContain('fix(items.lua)');
+    expect(serialized).not.toContain('04ea116');
+    expect(hasViewChangesButton(message)).toBe(false);
+  });
+
+  it('anonymizes the header actor and avatar for full-anon senders', () => {
+    const message = buildDiscordMessage(makePayload(), {
+      fullAnonUsers: ['chatdisabled'],
+    });
+    const header = getHeaderContent(message);
+
+    expect(header).toContain('**Anonymous** is pushing');
+    expect(header).not.toContain('github.com/ChatDisabled');
+    expect(message.avatar_url).toBe(ANONYMOUS_AVATAR_URL);
+  });
+
+  it('combines keyword and full-anon redaction in mixed pushes', () => {
+    const payload = makePayload({
+      compare: 'https://github.com/Qbox-project/txAdminRecipe/compare/before...after',
+      commits: [
+        makeCommit({
+          message: 'fix(items.lua): typo but also no\n\n!anon',
+        }),
+        makeCommit({
+          id: '9d369b178074f21542ce55bf447e574aae89778c',
+          message: 'tweak(voice.cfg): unset voice_useSendingRangeOnly',
+          url: 'https://github.com/Qbox-project/txAdminRecipe/commit/9d369b178074f21542ce55bf447e574aae89778c',
+          author: {
+            name: 'Other Dev',
+            email: '99999999+otherdev@users.noreply.github.com',
+            username: 'otherdev',
+          },
+          committer: {
+            name: 'Other Dev',
+            email: '99999999+otherdev@users.noreply.github.com',
+            username: 'otherdev',
+          },
+        }),
+        makeCommit({
+          id: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          message: 'secret change from full-anon user',
+          url: 'https://github.com/Qbox-project/txAdminRecipe/commit/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          author: {
+            name: 'Whereiam',
+            email: '84282589+WhereiamL@users.noreply.github.com',
+            username: 'WhereiamL',
+          },
+        }),
+      ],
+    });
+
+    const message = buildDiscordMessage(payload, {
+      fullAnonUsers: ['WhereiamL'],
+    });
+    const header = getHeaderContent(message);
+    const commitContent = getCommitContent(message);
+
+    expect(header).toContain('`Qbox-project/txAdminRecipe/main`');
+    expect(commitContent).toContain('`Anonymous commit`');
+    expect(commitContent).toContain('tweak(voice.cfg): unset voice_useSendingRangeOnly');
+    expect(commitContent).not.toContain('secret change from full-anon user');
+    expect(hasViewChangesButton(message)).toBe(false);
+  });
+
+  it('does not use anonymous avatar when avatars are disabled for anon senders', () => {
+    const message = buildDiscordMessage(makePayload(), {
+      nameAnonUsers: ['chatdisabled'],
+      useSenderAvatar: false,
+    });
+
+    expect(message.avatar_url).toBeUndefined();
   });
 });
 
