@@ -119,6 +119,25 @@ for (const scenario of scenarios) {
   }
 }
 
+console.log("Building dist...");
+const buildResult = spawnSync(
+  process.platform === "win32" ? "npm.cmd" : "npm",
+  ["run", "build"],
+  {
+    cwd: rootDir,
+    stdio: "inherit",
+    shell: process.platform === "win32",
+  },
+);
+
+if (buildResult.error) {
+  fail(`could not run npm run build (${buildResult.error.message})`);
+}
+
+if (buildResult.status !== 0) {
+  fail(`npm run build exited with status ${buildResult.status}`);
+}
+
 console.log("Running Discord push workflow locally with act...");
 console.log(`Secrets: ${secretsFile}`);
 console.log(`Scenarios (${scenarios.length}):`);

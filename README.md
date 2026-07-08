@@ -4,7 +4,7 @@ Post GitHub push commit notifications to Discord using the Components V2 message
 
 ## Features
 
-- Modern **node24** GitHub Action runtime with a bundled `dist/index.js`
+- Modern **node24** GitHub Action runtime with a minified bundle built by the release workflow
 - Discord **Components V2** layout instead of legacy embeds
 - Actor-aware header using `sender.login` (merger/pusher), separate from commit authors
 - Per-commit lines with linked SHAs, titles, and author/co-author profile links
@@ -121,7 +121,13 @@ npm ci
 npm run check
 ```
 
-`npm run check` runs typecheck, Vitest, and esbuild. Commit the generated `dist/index.js` so the action runs without a checkout-time build step.
+`npm run check` runs typecheck, Vitest, and esbuild. The `dist/` directory is gitignored; when you publish a GitHub release, the release workflow builds a minified `dist/index.js`, commits it to the release tag, and updates the floating major tag (e.g. `v1`).
+
+### Releasing
+
+1. Create a GitHub release with a semver tag such as `v1.2.3`.
+2. The release workflow runs typecheck, tests, and a minified build, then commits `dist/index.js` to the release tag and force-pushes it.
+3. The workflow also force-updates the floating major tag (e.g. `v1.2.3` → `v1`) so consumers can pin `@v1`.
 
 ## Local workflow testing with act
 
@@ -150,7 +156,7 @@ Run all local workflow fixtures with one command:
 npm run act:test
 ```
 
-This runs six scenarios sequentially through act using `.secrets`. Each scenario posts a real Discord message so you can visually inspect the output — see [Examples](#examples) for reference screenshots. The script exits non-zero if `.secrets` is missing or any scenario fails.
+This builds `dist/index.js` automatically, then runs six scenarios sequentially through act using `.secrets`. Each scenario posts a real Discord message so you can visually inspect the output — see [Examples](#examples) for reference screenshots. The script exits non-zero if the build fails, `.secrets` is missing, or any scenario fails.
 
 | Scenario | Workflow | Fixture | What to look for |
 | --- | --- | --- | --- |
