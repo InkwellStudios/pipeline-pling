@@ -22,6 +22,7 @@ import {
   parseUsernameList,
   resolveUsername,
   shouldSkipPush,
+  stripLinks,
   truncate,
 } from '../message.js';
 import { ANONYMOUS_AVATAR_URL } from '../types.js';
@@ -1031,5 +1032,68 @@ body`;
   it('truncates plain titles without PR refs as before', () => {
     expect(formatCommitTitle('short title', 72, repoUrl)).toBe('short title');
     expect(formatCommitTitle('x'.repeat(80), 72, repoUrl)).toHaveLength(72);
+  });
+
+  it('strips http and https URLs when enabled', () => {
+    expect(formatCommitTitle('see https://evil.example/x now', 72, repoUrl, true)).toBe(
+      'see now',
+    );
+  });
+
+  it('leaves URLs intact when strip is disabled', () => {
+    expect(formatCommitTitle('see http://a.example/x now', 72, repoUrl, false)).toBe(
+      'see http://a.example/x now',
+    );
+  });
+});
+
+describe('stripLinks', () => {
+  it('removes http, https and www links', () => {
+    expect(stripLinks('a https://x.com/y b')).toBe('a b');
+    expect(stripLinks('a http://x.com b')).toBe('a b');
+    expect(stripLinks('go www.x.com now')).toBe('go now');
+  });
+
+  it('collapses whitespace left by removed links', () => {
+    expect(stripLinks('link:  https://x.com/y   end')).toBe('link: end');
+  });
+
+  it('preserves newlines across body lines', () => {
+    expect(stripLinks('first https://x.com/y\nsecond line')).toBe(
+      'first\nsecond line',
+    );
+  });
+
+  it('leaves link-free text unchanged', () => {
+    expect(stripLinks('no links here')).toBe('no links here');
+  });
+});
+
+describe('buildDiscordMessage strip-links', () => {
+  it('removes URLs from commit descriptions when stripLinks is set', () => {
+    const payload = makePayload({
+      commits: [
+        makeCommit({
+          message: 'feat: thing\n\nDetails at https://secret.example/path here',
+        }),
+      ],
+    });
+
+    const content = getCommitContent(buildDiscordMessage(payload, { stripLinks: true }));
+    expect(content).not.toContain('https://secret.example/path');
+    expect(content).toContain('Details at here');
+  });
+
+  it('keeps URLs in descriptions when stripLinks is not set', () => {
+    const payload = makePayload({
+      commits: [
+        makeCommit({
+          message: 'feat: thing\n\nDetails at https://secret.example/path here',
+        }),
+      ],
+    });
+
+    const content = getCommitContent(buildDiscordMessage(payload));
+    expect(content).toContain('https://secret.example/path');
   });
 });

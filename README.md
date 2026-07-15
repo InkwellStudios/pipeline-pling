@@ -79,6 +79,7 @@ When only some commits are silent, the notification shows only the remaining com
     use-repo-username: true # default
     name-anon-users: 'alice,bob' # optional
     full-anon-users: 'secret-user' # optional
+    strip-links: false # default
 ```
 
 ## Inputs
@@ -97,6 +98,7 @@ When only some commits are silent, the notification shows only the remaining com
 | `use-repo-username` | no | `true` | When `false`, omit `username` so Discord uses the webhook's configured name |
 | `name-anon-users` | no | | Comma-separated GitHub usernames whose display names are anonymized in the header, commit author lines, and co-author lines |
 | `full-anon-users` | no | | Comma-separated GitHub usernames whose commits are fully redacted when they are the author or a co-author |
+| `strip-links` | no | `false` | When `true`, remove URLs (`http://`, `https://`, `www.`) from commit titles and descriptions before posting |
 
 ## Anonymization
 

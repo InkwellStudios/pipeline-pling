@@ -30,6 +30,7 @@ export async function run(): Promise<void> {
   const useRepoUsername = core.getBooleanInput('use-repo-username');
   const nameAnonUsers = parseUsernameList(core.getInput('name-anon-users'));
   const fullAnonUsers = parseUsernameList(core.getInput('full-anon-users'));
+  const stripLinks = core.getBooleanInput('strip-links');
 
   const accentColorInput = core.getInput('accent-color');
   let accentColor: number | undefined;
@@ -71,6 +72,7 @@ export async function run(): Promise<void> {
     useRepoUsername,
     nameAnonUsers,
     fullAnonUsers,
+    stripLinks,
   });
 
   core.info(

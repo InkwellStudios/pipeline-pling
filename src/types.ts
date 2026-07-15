@@ -87,6 +87,7 @@ export interface BuildMessageOptions {
   maxTextLength?: number;
   maxTitleLength?: number;
   maxDescriptionLength?: number;
+  stripLinks?: boolean;
 }
 
 export const IS_COMPONENTS_V2 = 1 << 15;

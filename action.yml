@@ -46,6 +46,10 @@ inputs:
   full-anon-users:
     description: Comma-separated GitHub usernames whose commits are fully redacted (same as the anon keyword) when they are author or co-author
     required: false
+  strip-links:
+    description: When true, remove URLs from commit titles and descriptions before posting to Discord
+    required: false
+    default: 'false'
 
 runs:
   using: node24
