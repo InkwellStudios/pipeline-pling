@@ -23,6 +23,17 @@ const CO_AUTHOR_REGEX = /^Co-authored-by:\s*(.+?)\s*<([^>]+)>\s*$/gim;
 const NOREPLY_EMAIL_REGEX = /^(?:\d+\+)?([^@]+)@users\.noreply\.github\.com$/i;
 const PR_REF_REGEX = /\(#(\d+)\)/g;
 const COMMIT_BLOCK_SEPARATOR = '\n\n';
+const URL_REGEX = /\b(?:https?:\/\/|www\.)[^\s<>()[\]]+/gi;
+
+export function stripLinks(text: string): string {
+  return text
+    .replace(URL_REGEX, '')
+    .replace(/[^\S\r\n]{2,}/g, ' ')
+    .split(/\r?\n/)
+    .map((line) => line.replace(/[^\S\r\n]+$/, ''))
+    .join('\n')
+    .trim();
+}
 
 export function parseBranch(ref: string): string {
   const prefix = 'refs/heads/';
@@ -169,8 +180,11 @@ export function formatCommitTitle(
   message: string,
   maxTitleLength: number,
   repoHtmlUrl: string,
+  shouldStripLinks = false,
 ): string {
-  const rawTitle = getCommitTitle(message);
+  const rawTitle = shouldStripLinks
+    ? stripLinks(getCommitTitle(message))
+    : getCommitTitle(message);
   const trailingPrMatch = rawTitle.match(/\s*\(#\d+\)\s*$/);
 
   if (!trailingPrMatch) {
@@ -273,8 +287,15 @@ export function formatCommitAttribution(
   return `*by* ${peopleText}`;
 }
 
-function formatCommitDescription(message: string, maxDescriptionLength: number): string {
-  const description = truncate(getCommitDescription(message), maxDescriptionLength);
+function formatCommitDescription(
+  message: string,
+  maxDescriptionLength: number,
+  shouldStripLinks = false,
+): string {
+  const rawDescription = shouldStripLinks
+    ? stripLinks(getCommitDescription(message))
+    : getCommitDescription(message);
+  const description = truncate(rawDescription, maxDescriptionLength);
   if (!description) {
     return '';
   }
@@ -295,13 +316,19 @@ function formatCommitLine(
   maxTitleLength: number,
   maxDescriptionLength: number,
   repoHtmlUrl: string,
+  shouldStripLinks = false,
 ): string {
   if (isCommitFullyAnonymous(commit, anonKeyword, fullAnonUsers)) {
     return '`Anonymous commit`';
   }
 
   const shortSha = commit.id.slice(0, 7);
-  const title = formatCommitTitle(commit.message, maxTitleLength, repoHtmlUrl);
+  const title = formatCommitTitle(
+    commit.message,
+    maxTitleLength,
+    repoHtmlUrl,
+    shouldStripLinks,
+  );
   const attributionText = formatCommitAttribution(
     commit.author,
     parseCoAuthors(commit.message),
@@ -310,6 +337,7 @@ function formatCommitLine(
   const descriptionText = formatCommitDescription(
     commit.message,
     maxDescriptionLength,
+    shouldStripLinks,
   );
 
   return `[\`${shortSha}\`](${commit.url}) ${title}\n${attributionText}${descriptionText}`;
@@ -395,6 +423,7 @@ function buildCommitLines(
   maxTitleLength: number,
   maxDescriptionLength: number,
   repoHtmlUrl: string,
+  shouldStripLinks: boolean,
 ): string[] {
   const lines: string[] = [];
 
@@ -413,6 +442,7 @@ function buildCommitLines(
         maxTitleLength,
         maxDescriptionLength,
         repoHtmlUrl,
+        shouldStripLinks,
       ),
     );
   }
@@ -482,6 +512,7 @@ export function buildDiscordMessage(
   const maxTitleLength = options.maxTitleLength ?? DEFAULT_MAX_TITLE_LENGTH;
   const maxDescriptionLength =
     options.maxDescriptionLength ?? DEFAULT_MAX_DESCRIPTION_LENGTH;
+  const shouldStripLinks = options.stripLinks ?? false;
 
   const branch = parseBranch(payload.ref);
   const commits = payload.commits;
@@ -511,6 +542,7 @@ export function buildDiscordMessage(
     maxTitleLength,
     maxDescriptionLength,
     payload.repository.html_url,
+    shouldStripLinks,
   );
   const commitTextBudget = Math.max(0, maxTextLength - header.length);
   const commitContent = trimLinesToMaxLength(lines, commitTextBudget).join(
